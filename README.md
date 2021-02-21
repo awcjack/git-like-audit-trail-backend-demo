@@ -12,5 +12,7 @@ Pull the repository and run `yarn install`
 ## Usage:
 
 `yarn start`
+
 Install Postman collection
+
 Test the CRUD endpoint (current batch CUD action cannot be reverted except creating custom function)
