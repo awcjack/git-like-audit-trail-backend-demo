@@ -18,10 +18,13 @@ var express__default = /*#__PURE__*/_interopDefaultLegacy(express);
 var bodyParser__default = /*#__PURE__*/_interopDefaultLegacy(bodyParser);
 var auditTrail__default = /*#__PURE__*/_interopDefaultLegacy(auditTrail);
 
+var cors = require('cors');
+
 var app = express__default['default']();
-var server = app.listen(3000, function () {
-  return console.log("Listening of localhost:3000");
+var server = app.listen(5000, function () {
+  return console.log("Listening of localhost:5000");
 });
+app.use(cors());
 app.use(bodyParser__default['default'].json());
 var db = new sqlite3__default['default'].Database('./test.db', function (err) {
   if (err) {
@@ -36,14 +39,14 @@ function appendCommitMap(_x) {
 }
 
 function _appendCommitMap() {
-  _appendCommitMap = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee16(_ref) {
+  _appendCommitMap = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee17(_ref) {
     var categoryId, commitHash, currentCommit, currentCommitMap;
-    return _regeneratorRuntime__default['default'].wrap(function _callee16$(_context16) {
+    return _regeneratorRuntime__default['default'].wrap(function _callee17$(_context17) {
       while (1) {
-        switch (_context16.prev = _context16.next) {
+        switch (_context17.prev = _context17.next) {
           case 0:
             categoryId = _ref.categoryId, commitHash = _ref.commitHash;
-            _context16.next = 3;
+            _context17.next = 3;
             return new Promise(function (resolve) {
               db.get('SELECT * FROM currentCommit WHERE categoryId = ?', [categoryId], function (err, row) {
                 if (err) {
@@ -65,7 +68,7 @@ function _appendCommitMap() {
             });
 
           case 3:
-            currentCommit = _context16.sent;
+            currentCommit = _context17.sent;
 
             if (currentCommit.exist) {
               db.run('UPDATE currentCommit SET commitHash = ? WHERE categoryId = ?', [commitHash, categoryId], function (err) {
@@ -82,7 +85,7 @@ function _appendCommitMap() {
             }
 
             console.log("user awcjack in commit ".concat(commitHash, " now"));
-            _context16.next = 8;
+            _context17.next = 8;
             return new Promise(function (resolve) {
               db.get('SELECT * FROM commitMap WHERE categoryId = ?', [categoryId], function (err, row) {
                 if (err) {
@@ -104,7 +107,7 @@ function _appendCommitMap() {
             });
 
           case 8:
-            currentCommitMap = _context16.sent;
+            currentCommitMap = _context17.sent;
 
             if (currentCommitMap.exist) {
               if (currentCommit.exist) {
@@ -156,10 +159,10 @@ function _appendCommitMap() {
 
           case 10:
           case "end":
-            return _context16.stop();
+            return _context17.stop();
         }
       }
-    }, _callee16);
+    }, _callee17);
   }));
   return _appendCommitMap.apply(this, arguments);
 }
@@ -616,7 +619,90 @@ app.get('/query/git', /*#__PURE__*/function () {
   return function (_x9, _x10) {
     return _ref10.apply(this, arguments);
   };
-}());
+}()); // construct d3 tree
+
+app.get('/query/d3', /*#__PURE__*/function () {
+  var _ref11 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee7(req, res) {
+    var commitHashMap, currentCommit, result;
+    return _regeneratorRuntime__default['default'].wrap(function _callee7$(_context7) {
+      while (1) {
+        switch (_context7.prev = _context7.next) {
+          case 0:
+            _context7.next = 2;
+            return new Promise(function (resolve) {
+              db.get('SELECT * FROM commitMap WHERE categoryId = ?', ["testTable"], function (err, row) {
+                if (err || !row) {
+                  resolve({
+                    error: true,
+                    err: err === null || err === void 0 ? void 0 : err.message
+                  });
+                } else {
+                  resolve({
+                    error: false,
+                    commitMap: row.commitHashMap
+                  });
+                }
+              });
+            });
+
+          case 2:
+            commitHashMap = _context7.sent;
+            _context7.next = 5;
+            return new Promise(function (resolve) {
+              db.get('SELECT * FROM currentCommit WHERE categoryId = ?', ["testTable"], function (err, row) {
+                if (err || !row) {
+                  resolve({
+                    error: true,
+                    err: err === null || err === void 0 ? void 0 : err.message
+                  });
+                } else {
+                  resolve({
+                    error: false,
+                    commitHash: row.commitHash
+                  });
+                }
+              });
+            });
+
+          case 5:
+            currentCommit = _context7.sent;
+
+            if (!(commitHashMap.error || currentCommit.error)) {
+              _context7.next = 11;
+              break;
+            }
+
+            console.log("Either query commit hash map or user current commit error");
+            res.send("Query error ".concat(commitHashMap.err, " ").concat(currentCommit.err));
+            _context7.next = 15;
+            break;
+
+          case 11:
+            _context7.next = 13;
+            return _auditTrail.queryD3({
+              commitHashMap: commitHashMap.commitMap,
+              commitHash: currentCommit.commitHash,
+              onlyCurrentBranch: false,
+              getCommitInfo: true
+            });
+
+          case 13:
+            result = _context7.sent;
+            res.json(result);
+
+          case 15:
+          case "end":
+            return _context7.stop();
+        }
+      }
+    }, _callee7);
+  }));
+
+  return function (_x11, _x12) {
+    return _ref11.apply(this, arguments);
+  };
+}()); // get testTable data
+
 app.get('/query', function (req, res) {
   db.all('SELECT * FROM testTable', [], function (err, row) {
     if (err) {
@@ -627,7 +713,8 @@ app.get('/query', function (req, res) {
       console.log("All row has been queried");
     }
   });
-});
+}); // get current commit table data
+
 app.get('/query/currentCommit', function (req, res) {
   db.all('SELECT * FROM currentCommit', [], function (err, row) {
     if (err) {
@@ -638,7 +725,8 @@ app.get('/query/currentCommit', function (req, res) {
       console.log("All row has been queried");
     }
   });
-});
+}); // get commit map data
+
 app.get('/query/commitMap', function (req, res) {
   db.all('SELECT * FROM commitMap', [], function (err, row) {
     if (err) {
@@ -662,12 +750,12 @@ app.get('/query/:id', function (req, res) {
   });
 });
 app["delete"]('/delete', /*#__PURE__*/function () {
-  var _ref11 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee7(req, res) {
+  var _ref12 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee8(req, res) {
     var idArray, oldPromiseArray, promiseArray, _loop, i, oldResult, result, errorCounter, _parentTrail, parentTrail, commitHash, _i, _result$_i, _result$_i$content, _result$_i2, _result$_i2$content, _oldResult$_i;
 
-    return _regeneratorRuntime__default['default'].wrap(function _callee7$(_context7) {
+    return _regeneratorRuntime__default['default'].wrap(function _callee8$(_context8) {
       while (1) {
-        switch (_context7.prev = _context7.next) {
+        switch (_context8.prev = _context8.next) {
           case 0:
             idArray = req.body.idArray;
             oldPromiseArray = [];
@@ -710,24 +798,24 @@ app["delete"]('/delete', /*#__PURE__*/function () {
               _loop();
             }
 
-            _context7.next = 7;
+            _context8.next = 7;
             return Promise.all(oldPromiseArray);
 
           case 7:
-            oldResult = _context7.sent;
-            _context7.next = 10;
+            oldResult = _context8.sent;
+            _context8.next = 10;
             return Promise.all(promiseArray);
 
           case 10:
-            result = _context7.sent;
+            result = _context8.sent;
             errorCounter = 0;
 
             if (!result) {
-              _context7.next = 35;
+              _context8.next = 35;
               break;
             }
 
-            _context7.next = 15;
+            _context8.next = 15;
             return _auditTrail.createData({
               categoryId: "testTable",
               userId: "awcjack",
@@ -740,10 +828,10 @@ app["delete"]('/delete', /*#__PURE__*/function () {
             });
 
           case 15:
-            _parentTrail = _context7.sent;
+            _parentTrail = _context8.sent;
             parentTrail = _parentTrail.parentTrail;
             commitHash = _parentTrail.commitHash;
-            _context7.next = 20;
+            _context8.next = 20;
             return appendCommitMap({
               categoryId: "testTable",
               userId: "awcjack",
@@ -755,22 +843,22 @@ app["delete"]('/delete', /*#__PURE__*/function () {
 
           case 21:
             if (!(_i < result.length)) {
-              _context7.next = 32;
+              _context8.next = 32;
               break;
             }
 
             if (!result[_i].error) {
-              _context7.next = 27;
+              _context8.next = 27;
               break;
             }
 
             console.log(result[_i].err);
             errorCounter++;
-            _context7.next = 29;
+            _context8.next = 29;
             break;
 
           case 27:
-            _context7.next = 29;
+            _context8.next = 29;
             return _auditTrail.createData({
               categoryId: "testTable",
               userId: "awcjack",
@@ -784,7 +872,7 @@ app["delete"]('/delete', /*#__PURE__*/function () {
 
           case 29:
             _i++;
-            _context7.next = 21;
+            _context8.next = 21;
             break;
 
           case 32:
@@ -794,7 +882,7 @@ app["delete"]('/delete', /*#__PURE__*/function () {
               res.send("Batch delete completed");
             }
 
-            _context7.next = 36;
+            _context8.next = 36;
             break;
 
           case 35:
@@ -802,25 +890,25 @@ app["delete"]('/delete', /*#__PURE__*/function () {
 
           case 36:
           case "end":
-            return _context7.stop();
+            return _context8.stop();
         }
       }
-    }, _callee7);
+    }, _callee8);
   }));
 
-  return function (_x11, _x12) {
-    return _ref11.apply(this, arguments);
+  return function (_x13, _x14) {
+    return _ref12.apply(this, arguments);
   };
 }());
 app.get('/delete/:id', /*#__PURE__*/function () {
-  var _ref12 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee8(req, res) {
+  var _ref13 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee9(req, res) {
     var oldResult, result, _oldResult$content, _oldResult$content2, trail, commitHash;
 
-    return _regeneratorRuntime__default['default'].wrap(function _callee8$(_context8) {
+    return _regeneratorRuntime__default['default'].wrap(function _callee9$(_context9) {
       while (1) {
-        switch (_context8.prev = _context8.next) {
+        switch (_context9.prev = _context9.next) {
           case 0:
-            _context8.next = 2;
+            _context9.next = 2;
             return new Promise(function (resolve) {
               db.get('SELECT * FROM testTable WHERE id = ?', [req.params.id], function (err, row) {
                 if (err) {
@@ -838,8 +926,8 @@ app.get('/delete/:id', /*#__PURE__*/function () {
             });
 
           case 2:
-            oldResult = _context8.sent;
-            _context8.next = 5;
+            oldResult = _context9.sent;
+            _context9.next = 5;
             return new Promise(function (resolve) {
               db.run('DELETE FROM testTable WHERE id = ?', [req.params.id], function (err) {
                 if (err || this.changes === 0) {
@@ -856,25 +944,25 @@ app.get('/delete/:id', /*#__PURE__*/function () {
             });
 
           case 5:
-            result = _context8.sent;
+            result = _context9.sent;
 
             if (!result) {
-              _context8.next = 21;
+              _context9.next = 21;
               break;
             }
 
             if (!result.error) {
-              _context8.next = 12;
+              _context9.next = 12;
               break;
             }
 
             console.log("Update error: ".concat(result.err));
             res.send(result.err);
-            _context8.next = 19;
+            _context9.next = 19;
             break;
 
           case 12:
-            _context8.next = 14;
+            _context9.next = 14;
             return _auditTrail.createData({
               categoryId: "testTable",
               userId: "awcjack",
@@ -886,9 +974,9 @@ app.get('/delete/:id', /*#__PURE__*/function () {
             });
 
           case 14:
-            trail = _context8.sent;
+            trail = _context9.sent;
             commitHash = trail.commitHash;
-            _context8.next = 18;
+            _context9.next = 18;
             return appendCommitMap({
               categoryId: "testTable",
               userId: "awcjack",
@@ -899,7 +987,7 @@ app.get('/delete/:id', /*#__PURE__*/function () {
             res.send("Delete Done");
 
           case 19:
-            _context8.next = 22;
+            _context9.next = 22;
             break;
 
           case 21:
@@ -907,23 +995,23 @@ app.get('/delete/:id', /*#__PURE__*/function () {
 
           case 22:
           case "end":
-            return _context8.stop();
+            return _context9.stop();
         }
       }
-    }, _callee8);
+    }, _callee9);
   }));
 
-  return function (_x13, _x14) {
-    return _ref12.apply(this, arguments);
+  return function (_x15, _x16) {
+    return _ref13.apply(this, arguments);
   };
 }());
 app.patch('/update', /*#__PURE__*/function () {
-  var _ref13 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee9(req, res) {
+  var _ref14 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee10(req, res) {
     var objArray, oldPromiseArray, promiseArray, _loop2, i, oldResult, result, errorCounter, _parentTrail, parentTrail, _i2, _result$_i3, _result$_i3$content, _result$_i4, _result$_i4$content, _oldResult$_i2, _result$_i5, _result$_i5$content, _result$_i6, _result$_i6$content, commitHash;
 
-    return _regeneratorRuntime__default['default'].wrap(function _callee9$(_context9) {
+    return _regeneratorRuntime__default['default'].wrap(function _callee10$(_context10) {
       while (1) {
-        switch (_context9.prev = _context9.next) {
+        switch (_context10.prev = _context10.next) {
           case 0:
             objArray = req.body.objArray;
             oldPromiseArray = [];
@@ -970,24 +1058,24 @@ app.patch('/update', /*#__PURE__*/function () {
               _loop2();
             }
 
-            _context9.next = 7;
+            _context10.next = 7;
             return Promise.all(oldPromiseArray);
 
           case 7:
-            oldResult = _context9.sent;
-            _context9.next = 10;
+            oldResult = _context10.sent;
+            _context10.next = 10;
             return Promise.all(promiseArray);
 
           case 10:
-            result = _context9.sent;
+            result = _context10.sent;
             errorCounter = 0;
 
             if (!result) {
-              _context9.next = 35;
+              _context10.next = 35;
               break;
             }
 
-            _context9.next = 15;
+            _context10.next = 15;
             return _auditTrail.createData({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1000,28 +1088,28 @@ app.patch('/update', /*#__PURE__*/function () {
             });
 
           case 15:
-            _parentTrail = _context9.sent;
+            _parentTrail = _context10.sent;
             parentTrail = _parentTrail.parentTrail;
             _i2 = 0;
 
           case 18:
             if (!(_i2 < result.length)) {
-              _context9.next = 29;
+              _context10.next = 29;
               break;
             }
 
             if (!result[_i2].error) {
-              _context9.next = 24;
+              _context10.next = 24;
               break;
             }
 
             console.log(result[_i2].err);
             errorCounter++;
-            _context9.next = 26;
+            _context10.next = 26;
             break;
 
           case 24:
-            _context9.next = 26;
+            _context10.next = 26;
             return _auditTrail.createData({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1038,12 +1126,12 @@ app.patch('/update', /*#__PURE__*/function () {
 
           case 26:
             _i2++;
-            _context9.next = 18;
+            _context10.next = 18;
             break;
 
           case 29:
             commitHash = _parentTrail.commitHash;
-            _context9.next = 32;
+            _context10.next = 32;
             return appendCommitMap({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1057,7 +1145,7 @@ app.patch('/update', /*#__PURE__*/function () {
               res.send("Batch update completed");
             }
 
-            _context9.next = 36;
+            _context10.next = 36;
             break;
 
           case 35:
@@ -1065,25 +1153,25 @@ app.patch('/update', /*#__PURE__*/function () {
 
           case 36:
           case "end":
-            return _context9.stop();
+            return _context10.stop();
         }
       }
-    }, _callee9);
+    }, _callee10);
   }));
 
-  return function (_x15, _x16) {
-    return _ref13.apply(this, arguments);
+  return function (_x17, _x18) {
+    return _ref14.apply(this, arguments);
   };
 }());
 app.get('/update/:id/:name', /*#__PURE__*/function () {
-  var _ref14 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee10(req, res) {
+  var _ref15 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee11(req, res) {
     var oldResult, result, _result$content, _result$content2, _result$content3, _result$content4, trail, commitHash;
 
-    return _regeneratorRuntime__default['default'].wrap(function _callee10$(_context10) {
+    return _regeneratorRuntime__default['default'].wrap(function _callee11$(_context11) {
       while (1) {
-        switch (_context10.prev = _context10.next) {
+        switch (_context11.prev = _context11.next) {
           case 0:
-            _context10.next = 2;
+            _context11.next = 2;
             return new Promise(function (resolve) {
               db.get('SELECT * FROM testTable WHERE id = ?', [req.params.id], function (err, row) {
                 if (err) {
@@ -1101,8 +1189,8 @@ app.get('/update/:id/:name', /*#__PURE__*/function () {
             });
 
           case 2:
-            oldResult = _context10.sent;
-            _context10.next = 5;
+            oldResult = _context11.sent;
+            _context11.next = 5;
             return new Promise(function (resolve) {
               db.run('UPDATE testTable SET name = ? WHERE id = ?', [req.params.name, req.params.id], function (err) {
                 if (err || this.changes === 0) {
@@ -1123,25 +1211,25 @@ app.get('/update/:id/:name', /*#__PURE__*/function () {
             });
 
           case 5:
-            result = _context10.sent;
+            result = _context11.sent;
 
             if (!result) {
-              _context10.next = 21;
+              _context11.next = 21;
               break;
             }
 
             if (!result.error) {
-              _context10.next = 12;
+              _context11.next = 12;
               break;
             }
 
             console.log("Update error: ".concat(result.err));
             res.send(result.err);
-            _context10.next = 19;
+            _context11.next = 19;
             break;
 
           case 12:
-            _context10.next = 14;
+            _context11.next = 14;
             return _auditTrail.createData({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1157,9 +1245,9 @@ app.get('/update/:id/:name', /*#__PURE__*/function () {
             });
 
           case 14:
-            trail = _context10.sent;
+            trail = _context11.sent;
             commitHash = trail.commitHash;
-            _context10.next = 18;
+            _context11.next = 18;
             return appendCommitMap({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1170,7 +1258,7 @@ app.get('/update/:id/:name', /*#__PURE__*/function () {
             res.send("Update Done");
 
           case 19:
-            _context10.next = 22;
+            _context11.next = 22;
             break;
 
           case 21:
@@ -1178,23 +1266,23 @@ app.get('/update/:id/:name', /*#__PURE__*/function () {
 
           case 22:
           case "end":
-            return _context10.stop();
+            return _context11.stop();
         }
       }
-    }, _callee10);
+    }, _callee11);
   }));
 
-  return function (_x17, _x18) {
-    return _ref14.apply(this, arguments);
+  return function (_x19, _x20) {
+    return _ref15.apply(this, arguments);
   };
 }());
 app.post('/add', /*#__PURE__*/function () {
-  var _ref15 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee11(req, res) {
+  var _ref16 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee12(req, res) {
     var objArray, promoiseArray, _loop3, i, result, errorCounter, _parentTrail, parentTrail, _i3, _result$_i7, _result$_i7$content, _result$_i8, _result$_i8$content, _result$_i9, _result$_i9$content, _result$_i10, _result$_i10$content, commitHash;
 
-    return _regeneratorRuntime__default['default'].wrap(function _callee11$(_context11) {
+    return _regeneratorRuntime__default['default'].wrap(function _callee12$(_context12) {
       while (1) {
-        switch (_context11.prev = _context11.next) {
+        switch (_context12.prev = _context12.next) {
           case 0:
             objArray = req.body.objArray;
             promoiseArray = [];
@@ -1225,19 +1313,19 @@ app.post('/add', /*#__PURE__*/function () {
               _loop3();
             }
 
-            _context11.next = 6;
+            _context12.next = 6;
             return Promise.all(promoiseArray);
 
           case 6:
-            result = _context11.sent;
+            result = _context12.sent;
             errorCounter = 0;
 
             if (!result) {
-              _context11.next = 31;
+              _context12.next = 31;
               break;
             }
 
-            _context11.next = 11;
+            _context12.next = 11;
             return _auditTrail.createData({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1250,28 +1338,28 @@ app.post('/add', /*#__PURE__*/function () {
             });
 
           case 11:
-            _parentTrail = _context11.sent;
+            _parentTrail = _context12.sent;
             parentTrail = _parentTrail.parentTrail;
             _i3 = 0;
 
           case 14:
             if (!(_i3 < result.length)) {
-              _context11.next = 25;
+              _context12.next = 25;
               break;
             }
 
             if (!result[_i3].error) {
-              _context11.next = 20;
+              _context12.next = 20;
               break;
             }
 
             console.log(result[_i3].err);
             errorCounter++;
-            _context11.next = 22;
+            _context12.next = 22;
             break;
 
           case 20:
-            _context11.next = 22;
+            _context12.next = 22;
             return _auditTrail.createData({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1288,12 +1376,12 @@ app.post('/add', /*#__PURE__*/function () {
 
           case 22:
             _i3++;
-            _context11.next = 14;
+            _context12.next = 14;
             break;
 
           case 25:
             commitHash = _parentTrail.commitHash;
-            _context11.next = 28;
+            _context12.next = 28;
             return appendCommitMap({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1307,7 +1395,7 @@ app.post('/add', /*#__PURE__*/function () {
               res.send("Batch insert completed");
             }
 
-            _context11.next = 32;
+            _context12.next = 32;
             break;
 
           case 31:
@@ -1315,25 +1403,25 @@ app.post('/add', /*#__PURE__*/function () {
 
           case 32:
           case "end":
-            return _context11.stop();
+            return _context12.stop();
         }
       }
-    }, _callee11);
+    }, _callee12);
   }));
 
-  return function (_x19, _x20) {
-    return _ref15.apply(this, arguments);
+  return function (_x21, _x22) {
+    return _ref16.apply(this, arguments);
   };
 }());
 app.get('/add/:id/:name', /*#__PURE__*/function () {
-  var _ref16 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee12(req, res) {
+  var _ref17 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee13(req, res) {
     var result, _result$content5, _result$content6, _result$content7, _result$content8, trail, commitHash;
 
-    return _regeneratorRuntime__default['default'].wrap(function _callee12$(_context12) {
+    return _regeneratorRuntime__default['default'].wrap(function _callee13$(_context13) {
       while (1) {
-        switch (_context12.prev = _context12.next) {
+        switch (_context13.prev = _context13.next) {
           case 0:
-            _context12.next = 2;
+            _context13.next = 2;
             return new Promise(function (resolve) {
               db.run('INSERT INTO testTable(id, name) VALUES(?, ?)', [req.params.id, req.params.name], function (err) {
                 if (err) {
@@ -1354,25 +1442,25 @@ app.get('/add/:id/:name', /*#__PURE__*/function () {
             });
 
           case 2:
-            result = _context12.sent;
+            result = _context13.sent;
 
             if (!result) {
-              _context12.next = 18;
+              _context13.next = 18;
               break;
             }
 
             if (!result.error) {
-              _context12.next = 9;
+              _context13.next = 9;
               break;
             }
 
             console.log("Insert error: ".concat(result.err));
             res.send(result.err);
-            _context12.next = 16;
+            _context13.next = 16;
             break;
 
           case 9:
-            _context12.next = 11;
+            _context13.next = 11;
             return _auditTrail.createData({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1388,9 +1476,9 @@ app.get('/add/:id/:name', /*#__PURE__*/function () {
             });
 
           case 11:
-            trail = _context12.sent;
+            trail = _context13.sent;
             commitHash = trail.commitHash;
-            _context12.next = 15;
+            _context13.next = 15;
             return appendCommitMap({
               categoryId: "testTable",
               userId: "awcjack",
@@ -1401,42 +1489,13 @@ app.get('/add/:id/:name', /*#__PURE__*/function () {
             res.send("Insert Done");
 
           case 16:
-            _context12.next = 19;
+            _context13.next = 19;
             break;
 
           case 18:
             res.send("Insert Error");
 
           case 19:
-          case "end":
-            return _context12.stop();
-        }
-      }
-    }, _callee12);
-  }));
-
-  return function (_x21, _x22) {
-    return _ref16.apply(this, arguments);
-  };
-}()); // revert commit
-
-app.get('/revert/:hash', /*#__PURE__*/function () {
-  var _ref17 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee13(req, res) {
-    var result;
-    return _regeneratorRuntime__default['default'].wrap(function _callee13$(_context13) {
-      while (1) {
-        switch (_context13.prev = _context13.next) {
-          case 0:
-            _context13.next = 2;
-            return _auditTrail.revertCommit({
-              commitHash: req.params.hash
-            });
-
-          case 2:
-            result = _context13.sent;
-            res.json(result);
-
-          case 4:
           case "end":
             return _context13.stop();
         }
@@ -1447,8 +1506,9 @@ app.get('/revert/:hash', /*#__PURE__*/function () {
   return function (_x23, _x24) {
     return _ref17.apply(this, arguments);
   };
-}());
-app.get('/cherrypick/:hash', /*#__PURE__*/function () {
+}()); // revert commit
+
+app.get('/revert/:hash', /*#__PURE__*/function () {
   var _ref18 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee14(req, res) {
     var result;
     return _regeneratorRuntime__default['default'].wrap(function _callee14$(_context14) {
@@ -1456,7 +1516,7 @@ app.get('/cherrypick/:hash', /*#__PURE__*/function () {
         switch (_context14.prev = _context14.next) {
           case 0:
             _context14.next = 2;
-            return _auditTrail.cherryPick({
+            return _auditTrail.revertCommit({
               commitHash: req.params.hash
             });
 
@@ -1475,17 +1535,45 @@ app.get('/cherrypick/:hash', /*#__PURE__*/function () {
   return function (_x25, _x26) {
     return _ref18.apply(this, arguments);
   };
-}()); // not yet implemented
-
-app.get('/checkout/:hash', /*#__PURE__*/function () {
+}());
+app.get('/cherrypick/:hash', /*#__PURE__*/function () {
   var _ref19 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee15(req, res) {
-    var commitHashMap, currentCommit, result, _req$params, _req$params2;
-
+    var result;
     return _regeneratorRuntime__default['default'].wrap(function _callee15$(_context15) {
       while (1) {
         switch (_context15.prev = _context15.next) {
           case 0:
             _context15.next = 2;
+            return _auditTrail.cherryPick({
+              commitHash: req.params.hash
+            });
+
+          case 2:
+            result = _context15.sent;
+            res.json(result);
+
+          case 4:
+          case "end":
+            return _context15.stop();
+        }
+      }
+    }, _callee15);
+  }));
+
+  return function (_x27, _x28) {
+    return _ref19.apply(this, arguments);
+  };
+}()); // not yet implemented
+
+app.get('/checkout/:hash', /*#__PURE__*/function () {
+  var _ref20 = _asyncToGenerator__default['default']( /*#__PURE__*/_regeneratorRuntime__default['default'].mark(function _callee16(req, res) {
+    var commitHashMap, currentCommit, result, _req$params, _req$params2;
+
+    return _regeneratorRuntime__default['default'].wrap(function _callee16$(_context16) {
+      while (1) {
+        switch (_context16.prev = _context16.next) {
+          case 0:
+            _context16.next = 2;
             return new Promise(function (resolve) {
               db.get('SELECT * FROM commitMap WHERE categoryId = ?', ["testTable"], function (err, row) {
                 if (err || !row) {
@@ -1503,8 +1591,8 @@ app.get('/checkout/:hash', /*#__PURE__*/function () {
             });
 
           case 2:
-            commitHashMap = _context15.sent;
-            _context15.next = 5;
+            commitHashMap = _context16.sent;
+            _context16.next = 5;
             return new Promise(function (resolve) {
               db.get('SELECT * FROM currentCommit WHERE categoryId = ?', ["testTable"], function (err, row) {
                 if (err || !row) {
@@ -1522,27 +1610,27 @@ app.get('/checkout/:hash', /*#__PURE__*/function () {
             });
 
           case 5:
-            currentCommit = _context15.sent;
+            currentCommit = _context16.sent;
             console.log("commitHashMap", commitHashMap);
             console.log("currentCommit", currentCommit);
             result = {};
 
             if (commitHashMap.error) {
-              _context15.next = 15;
+              _context16.next = 15;
               break;
             }
 
             if (currentCommit.error) {
-              _context15.next = 15;
+              _context16.next = 15;
               break;
             }
 
             if (!(req !== null && req !== void 0 && (_req$params = req.params) !== null && _req$params !== void 0 && _req$params.hash && typeof (req === null || req === void 0 ? void 0 : (_req$params2 = req.params) === null || _req$params2 === void 0 ? void 0 : _req$params2.hash) === "string")) {
-              _context15.next = 15;
+              _context16.next = 15;
               break;
             }
 
-            _context15.next = 14;
+            _context16.next = 14;
             return _auditTrail.checkout({
               commitHashMap: commitHashMap.commitMap,
               currentCommit: currentCommit.commitHash,
@@ -1550,21 +1638,21 @@ app.get('/checkout/:hash', /*#__PURE__*/function () {
             });
 
           case 14:
-            result = _context15.sent;
+            result = _context16.sent;
 
           case 15:
             res.json(result);
 
           case 16:
           case "end":
-            return _context15.stop();
+            return _context16.stop();
         }
       }
-    }, _callee15);
+    }, _callee16);
   }));
 
-  return function (_x27, _x28) {
-    return _ref19.apply(this, arguments);
+  return function (_x29, _x30) {
+    return _ref20.apply(this, arguments);
   };
 }());
 app.get('/close', function (req, res) {

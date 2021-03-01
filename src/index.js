@@ -3,9 +3,11 @@ import sqlite3 from "sqlite3"
 import express from "express"
 import bodyParser from "body-parser"
 import auditTrail from "git-like-audit-trail"
+var cors = require('cors')
 
 var app = express()
-var server = app.listen(3000, () => console.log("Listening of localhost:3000"))
+var server = app.listen(5000, () => console.log("Listening of localhost:5000"))
+app.use(cors())
 app.use(bodyParser.json())
 
 let db = new sqlite3.Database('./test.db', (err) => {
@@ -393,6 +395,55 @@ app.get('/query/git', async function (req, res) {
     }
 })
 
+// construct d3 tree
+app.get('/query/d3', async function (req, res) {
+    const commitHashMap = await new Promise((resolve) => {
+        db.get('SELECT * FROM commitMap WHERE categoryId = ?', ["testTable"], function (err, row) {
+            if (err || !row) {
+                resolve({
+                    error: true,
+                    err: err?.message
+                })
+            } else {
+                resolve({
+                    error: false,
+                    commitMap: row.commitHashMap
+                })
+            }
+        })
+    })
+
+    const currentCommit = await new Promise((resolve) => {
+        db.get('SELECT * FROM currentCommit WHERE categoryId = ?', ["testTable"], function (err, row) {
+            if (err || !row) {
+                resolve({
+                    error: true,
+                    err: err?.message
+                })
+            } else {
+                resolve({
+                    error: false,
+                    commitHash: row.commitHash
+                })
+            }
+        })
+    })
+
+    if (commitHashMap.error || currentCommit.error) {
+        console.log("Either query commit hash map or user current commit error")
+        res.send(`Query error ${commitHashMap.err} ${currentCommit.err}`)
+    } else {
+        const result = await _auditTrail.queryD3({
+            commitHashMap: commitHashMap.commitMap,
+            commitHash: currentCommit.commitHash,
+            onlyCurrentBranch: false,
+            getCommitInfo: true
+        })
+        res.json(result)
+    }
+})
+
+// get testTable data
 app.get('/query', function (req, res) {
     db.all('SELECT * FROM testTable', [], function (err, row) {
         if (err) {
@@ -405,6 +456,7 @@ app.get('/query', function (req, res) {
     })
 })
 
+// get current commit table data
 app.get('/query/currentCommit', function (req, res) {
     db.all('SELECT * FROM currentCommit', [], function (err, row) {
         if (err) {
@@ -417,6 +469,7 @@ app.get('/query/currentCommit', function (req, res) {
     })
 })
 
+// get commit map data
 app.get('/query/commitMap', function (req, res) {
     db.all('SELECT * FROM commitMap', [], function (err, row) {
         if (err) {
