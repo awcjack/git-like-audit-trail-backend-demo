@@ -284,7 +284,7 @@ const databaseUpdateOneRowFunction = async ({
                     })
                 } else {
                     resolve({
-                        error: true,
+                        error: false,
                         content
                     })
                 }
@@ -395,6 +395,53 @@ app.get('/query/git', async function (req, res) {
     }
 })
 
+function parseD3Tree({
+    d3Tree,
+    color,
+    loadMore = false
+}) {
+    if (!color) {
+        const _tmp = parseInt(d3Tree?.name?.substring(d3Tree?.name?.length - 10), 16)
+        color = (_tmp % 16777216).toString(16) // ffffff + 1
+    }
+    d3Tree.nodeProps = {
+        id: d3Tree?.name,
+        style: {
+            fill: `#${color}`,
+            r: 10
+        }
+    }
+    if (!loadMore && d3Tree.currentCommit) {
+        d3Tree.nodeProps = {
+            id: d3Tree?.name,
+            style: {
+                fill: `#F3F3FF`,
+                stroke: `#${color}`,
+                r: 12
+            }
+        }
+    } else if (d3Tree.currentCommit) {
+        delete d3Tree.currentCommit
+    }
+    if (d3Tree.children) {
+        for (let i = 0; i < d3Tree.children?.length ?? 0; i++) {
+            if (i !== 0) {
+                const _tmp = parseInt(d3Tree?.children?.[i]?.name?.substring(d3Tree?.name?.length - 10), 16)
+                color = (_tmp % 16777216).toString(16)
+            }
+            d3Tree.children[i] = parseD3Tree({
+                d3Tree: d3Tree?.children?.[i],
+                color,
+                loadMore
+            })
+        }
+    } else {
+        // last level
+        d3Tree.lastLevel = true
+    }
+    return d3Tree
+}
+
 // construct d3 tree
 app.get('/query/d3', async function (req, res) {
     const commitHashMap = await new Promise((resolve) => {
@@ -433,12 +480,73 @@ app.get('/query/d3', async function (req, res) {
         console.log("Either query commit hash map or user current commit error")
         res.send(`Query error ${commitHashMap.err} ${currentCommit.err}`)
     } else {
-        const result = await _auditTrail.queryD3({
+        let result = await _auditTrail.queryD3({
             commitHashMap: commitHashMap.commitMap,
             commitHash: currentCommit.commitHash,
             onlyCurrentBranch: false,
-            getCommitInfo: true
+            getCommitInfo: true,
+            ignore: ["parentTrail"],
+            format: "text"
         })
+        // assign colour
+        for (let i = 0; i < result.length; i++) {
+            result[i] = parseD3Tree({
+                d3Tree: result[i]
+            })
+        }
+        res.json(result)
+    }
+})
+
+app.post('/d3/loadMore', async function (req, res) {
+    const {
+        commitHash,
+        color,
+        before = 0,
+        after = 0
+    } = req.body
+    const commitHashMap = await new Promise((resolve) => {
+        db.get('SELECT * FROM commitMap WHERE categoryId = ?', ["testTable"], function (err, row) {
+            if (err || !row) {
+                resolve({
+                    error: true,
+                    err: err?.message
+                })
+            } else {
+                resolve({
+                    error: false,
+                    commitMap: row.commitHashMap
+                })
+            }
+        })
+    })
+    if (commitHashMap.error) {
+        console.log("Query commit hash map error")
+        res.send(`Query error ${commitHashMap.err}`)
+    } else {
+        let result = await _auditTrail.queryD3({
+            commitHashMap: commitHashMap.commitMap,
+            commitHash,
+            before,
+            after,
+            onlyCurrentBranch: before > 0 ? false : true,
+            getCommitInfo: true,
+            ignore: ["parentTrail"],
+            format: "text"
+        })
+        // assign colour
+        if (result.length !== 0) {
+            // must only one root
+            if (result[0].currentCommit) {
+                delete result[0].currentCommit
+            }
+            result[0] = parseD3Tree({
+                d3Tree: result[0],
+                color,
+                loadMore: true
+            })
+        }
+        
         res.json(result)
     }
 })
@@ -951,6 +1059,7 @@ app.get('/revert/:hash', async function (req, res) {
     const result = await _auditTrail.revertCommit({
         commitHash: req.params.hash,
     })
+    console.log("result", result)
     res.json(result)
 })
 
@@ -958,10 +1067,10 @@ app.get('/cherrypick/:hash', async function (req, res) {
     const result = await _auditTrail.cherryPick({
         commitHash: req.params.hash,
     })
+    console.log("result", result)
     res.json(result)
 })
 
-// not yet implemented
 app.get('/checkout/:hash', async function (req, res) {
     const commitHashMap = await new Promise((resolve) => {
         db.get('SELECT * FROM commitMap WHERE categoryId = ?', ["testTable"], function(err, row) {
@@ -995,16 +1104,50 @@ app.get('/checkout/:hash', async function (req, res) {
     })
     console.log("commitHashMap", commitHashMap)
     console.log("currentCommit", currentCommit)
-    let result = {}
+    let result = {
+        error: [],
+        result: {}
+    }
     if (!commitHashMap.error) {
         if (!currentCommit.error) {
             if (req?.params?.hash && typeof req?.params?.hash === "string") {
-                result = await _auditTrail.checkout({
+                result.result = await _auditTrail.checkout({
                     commitHashMap: commitHashMap.commitMap,
                     currentCommit: currentCommit.commitHash,
                     commitHash: req.params.hash,
                 })
+                result.error = []
+                for (const _result of result.result) {
+                    const keys = Object.keys(_result)
+                    for (const key of keys) {
+                        if (_result?.[key]?.error) {
+                            result.error.push(_result)
+                        }
+                    }
+                }
             }
+        }
+    }
+
+    if (result?.error?.length === 0) {
+        // no error --> save commit hash in to db
+        const _result = await new Promise((resolve) => {
+            db.run('UPDATE currentCommit SET commitHash = ? WHERE categoryId = ?', [req.params.hash, "testTable"], function (err) {
+                if (err || this.changes === 0) {
+                    console.log("update user current commit error", err.message || "No change")
+                    resolve({
+                        error: true
+                    })
+                }
+                resolve({
+                    error: false
+                })
+            })
+        })
+        if (!_result.error) {
+            result.saved = true
+        } else {
+            result.saved = false
         }
     }
     res.json(result)
